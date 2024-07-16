@@ -1,4 +1,4 @@
-#Data Cleaning Tasks
+## Data Cleaning Tasks
 * Remove Duplicates - Use Row Number function to identify and remove duplicate records.
 * Convert Data Types - Ensure all columns have the appropriate data types for their content.
 * Populate Columns Using Existing Columns - Use existing column values to fill in or create new columns.
