@@ -1,5 +1,5 @@
 ## Data Cleaning Tasks
-* Remove Duplicates - Use Row Number function to identify and remove duplicate records.
+* > Remove Duplicates < - Use Row Number function to identify and remove duplicate records.
 * Convert Data Types - Ensure all columns have the appropriate data types for their content.
 * Populate Columns Using Existing Columns - Use existing column values to fill in or create new columns.
 * Remove NULL Values - Identify and eliminate rows with NULL values where appropriate.
@@ -11,7 +11,7 @@
 * Use Common Table Expressions (CTEs) - Simplify complex queries and improve readability with CTEs.
 * Cast / Try_Cast - Convert data types safely using CAST or TRY_CAST functions.
 
-Exploratory Data Analysis (EDA) Tasks
+## Exploratory Data Analysis (EDA) Tasks
 * View the Schema of the Table - Examine the structure and organization of the table.
 * Check Data Types - Verify and ensure that the data types of each column are appropriate.
 * Descriptive Statistics for Numeric Columns - Perform descriptive statistics on numeric columns, such as Acreage.
