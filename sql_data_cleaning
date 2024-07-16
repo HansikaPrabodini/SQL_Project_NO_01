@@ -1,0 +1,401 @@
+USE [p2_data_cleaning]
+GO
+
+SELECT [UniqueID ]
+      ,[ParcelID]
+      ,[LandUse]
+      ,[PropertyAddress]
+      ,[SaleDate]
+      ,[SalePrice]
+      ,[LegalReference]
+      ,[SoldAsVacant]
+      ,[OwnerName]
+      ,[OwnerAddress]
+      ,[Acreage]
+      ,[TaxDistrict]
+      ,[LandValue]
+      ,[BuildingValue]
+      ,[TotalValue]
+      ,[YearBuilt]
+      ,[Bedrooms]
+      ,[FullBath]
+      ,[HalfBath]
+  FROM [dbo].[nashville_housing]
+
+GO
+
+-- data cleaning task - 02 
+-- create duplicate table excatly like nashville_housing
+SELECT *
+INTO nash_housing
+FROM nashville_housing
+
+-- now we use nash_housing for further 
+select *
+from nash_housing
+
+-- remove times in date
+select SaleDate , CONVERT(date,SaleDate)
+from nash_housing
+
+update nash_housing
+set SaleDate =  CONVERT(date,SaleDate)
+
+-- but can't update it as date data type so need to create alter column
+alter table nash_housing
+add sale_date date
+
+update nash_housing
+set sale_date =  cast(SaleDate as date)
+
+
+-- remove null values in OwnerName, OwnerAddress, Acreage, TaxDistrict, LandValue, BuildingValue, TotalValue, YearBuilt, Bedrooms, FullBath, HalfBath 
+-- need to create another table for it 
+
+SELECT *
+INTO nash_housing_without_null
+FROM nash_housing
+
+SELECT *
+FROM nash_housing
+WHERE COALESCE(OwnerName, OwnerAddress, Acreage, TaxDistrict, LandValue, BuildingValue, TotalValue, YearBuilt, Bedrooms, FullBath, HalfBath) IS NULL;
+
+
+SELECT *
+FROM nash_housing_without_null
+WHERE OwnerName IS NULL
+  AND OwnerAddress IS NULL
+  AND Acreage IS NULL
+  AND TaxDistrict IS NULL
+  AND LandValue IS NULL
+  AND BuildingValue IS NULL
+  AND TotalValue IS NULL
+  AND YearBuilt IS NULL
+  AND Bedrooms IS NULL
+  AND FullBath IS NULL
+  AND HalfBath IS NULL
+ 
+delete 
+FROM nash_housing_without_null
+WHERE OwnerName IS NULL
+  AND OwnerAddress IS NULL
+  AND Acreage IS NULL
+  AND TaxDistrict IS NULL
+  AND LandValue IS NULL
+  AND BuildingValue IS NULL
+  AND TotalValue IS NULL
+  AND YearBuilt IS NULL
+  AND Bedrooms IS NULL
+  AND FullBath IS NULL
+  AND HalfBath IS NULL
+
+SELECT *
+from nash_housing_without_null
+
+
+-- populate property address data using nash_housing
+SELECT ParcelID , count(PropertyAddress)
+FROM nash_housing
+group by ParcelID
+
+
+-- generate same parcelId but propertyAddress null values using joins
+SELECT a.ParcelID,a.PropertyAddress,b.ParcelID,b.PropertyAddress, isnull(a.PropertyAddress,b.PropertyAddress)
+FROM nash_housing a 
+join nash_housing b 
+on a.ParcelID=b.ParcelID
+and a.[UniqueID ]<>b.[UniqueID ]
+where a.PropertyAddress is null
+
+-- update same parcelids addres as property addresses 
+update a 
+set PropertyAddress = isnull(a.PropertyAddress,b.PropertyAddress)
+FROM nash_housing a 
+join nash_housing b 
+on a.ParcelID=b.ParcelID
+and a.[UniqueID ]<>b.[UniqueID ]
+where a.PropertyAddress is null
+
+
+select *
+from nash_housing
+
+
+
+SELECT ParcelID , count(OwnerName)
+FROM nash_housing
+group by ParcelID
+
+--check for any connections
+SELECT a.LegalReference,a.TaxDistrict,b.LegalReference,b.TaxDistrict
+FROM nash_housing a 
+join nash_housing b 
+on a.LegalReference=b.LegalReference
+and a.[UniqueID ]<>b.[UniqueID ]
+where a.TaxDistrict is null
+
+select distinct count(LegalReference)
+from nash_housing
+
+-- get city in address using SUBSTRING
+--ELECT SUBSTRING(ParentBGBU,CHARINDEX('-',ParentBGBU)+1,LEN(ParentBGBU))
+--select SUBSTRING('abcde/wxyz',CHARINDEX('/','abcde/wxyz'),LEN('abcde/wxyz')) 
+
+select PropertyAddress,
+SUBSTRING(PropertyAddress,CHARINDEX(',', PropertyAddress),len(PropertyAddress)- CHARINDEX(',', PropertyAddress))
+from nash_housing -- this comming with dot(.)
+
+
+--correctly get city values
+SELECT 
+    PropertyAddress,
+    SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 2, LEN(PropertyAddress) - CHARINDEX(',', PropertyAddress) - 1) AS City
+FROM nash_housing;
+
+-- create column as city and update city and need to mention length specially 
+ALTER TABLE nash_housing
+ADD city NVARCHAR(255);
+
+ALTER TABLE nash_housing
+ADD property_city NVARCHAR(255), property_address NVARCHAR(255);
+
+-- now update previous city to new column
+update nash_housing
+set city = SUBSTRING(PropertyAddress, CHARINDEX(',', PropertyAddress) + 2, LEN(PropertyAddress) - CHARINDEX(',', PropertyAddress) - 1) 
+
+select *
+from nash_housing
+-- now need to drop prevously created wrong city column to drop (delete)
+ALTER TABLE nash_housing
+DROP COLUMN city_address
+
+ALTER TABLE nash_housing
+DROP COLUMN city
+
+
+
+-- use parsename function - parsename mainly for '.' but we can replace it
+select OwnerAddress,
+parsename(replace(OwnerAddress, ',', '.'), 1) as owner_state, -- get only state
+parsename(replace(OwnerAddress, ',', '.'), 2) as owner_city,  -- get only city
+parsename(replace(OwnerAddress, ',', '.'), 3) as owner_address --get only address
+from nash_housing
+
+update nash_housing
+set OwnerAddress = (select OwnerAddress,
+parsename(replace(OwnerAddress, ',', '.'), 1) as owner_state,
+parsename(replace(OwnerAddress, ',', '.'), 2) as owner_city,
+parsename(replace(OwnerAddress, ',', '.'), 3) as owner_address
+from nash_housing )
+-- this method not update so need to optional methods like creating new columns
+
+-- add 3 columns
+ALTER TABLE nash_housing
+ADD owner_state NVARCHAR(255),
+    owner_city NVARCHAR(255),
+    owner_address NVARCHAR(255);
+
+
+-- use CTE and update data to it
+WITH ParsedAddress AS (
+SELECT OwnerAddress,
+        PARSENAME(REPLACE(OwnerAddress, ',', '.'), 1) AS owner_state,
+        PARSENAME(REPLACE(OwnerAddress, ',', '.'), 2) AS owner_city,
+        PARSENAME(REPLACE(OwnerAddress, ',', '.'), 3) AS owner_address
+FROM nash_housing
+)
+UPDATE nash_housing
+SET 
+    owner_state = ParsedAddress.owner_state,
+    owner_city = ParsedAddress.owner_city,
+    owner_address = ParsedAddress.owner_address
+FROM ParsedAddress
+WHERE nash_housing.OwnerAddress = ParsedAddress.OwnerAddress;
+
+
+
+
+--update property address and city 
+WITH ParsedAddress1 AS (
+SELECT PropertyAddress,
+        PARSENAME(REPLACE(PropertyAddress, ',', '.'), 1) AS property_city,
+        PARSENAME(REPLACE(PropertyAddress, ',', '.'), 2) AS property_address
+       
+FROM nash_housing
+)
+UPDATE nash_housing
+SET 
+    property_city = ParsedAddress1.property_city,
+    property_address = ParsedAddress1.property_address
+    
+FROM ParsedAddress1
+WHERE nash_housing.PropertyAddress = ParsedAddress1.PropertyAddress
+
+
+select *
+from nash_housing
+
+
+select distinct SoldAsVacant
+from nash_housing
+-- change Y and N to yes and no in SoldAsVacant 
+
+select a.SoldAsVacant , b.SoldAsVacant
+from nash_housing a 
+join nash_housing b on a.[UniqueID ]=b.[UniqueID ]
+
+--simply use update function for that 
+update nash_housing
+set SoldAsVacant = 'No'
+where SoldAsVacant = 'N'
+
+update nash_housing
+set SoldAsVacant = 'Yes'
+where SoldAsVacant = 'Y'
+
+select *,
+row_number() over(
+partition by ParcelID,PropertyAddress, SalePrice, SaleDate, LegalReference ORDER BY (SELECT NULL)) as row_num
+from nash_housing
+having row_num >1
+
+
+-- got duplicates 
+select COUNT(distinct[UniqueID ])
+from nash_housing
+
+-- get duplicate partition by below columns using CTE
+with duplicate_cte as (
+select *,
+row_number() over(
+partition by ParcelID,PropertyAddress, SalePrice, SaleDate, LegalReference ORDER BY UniqueID) row_num
+from nash_housing
+)
+
+select *
+from duplicate_cte
+where row_num>1   -- 104 duplicates found
+
+select *
+from nash_housing
+where ParcelID ='081 02 0 144.00'
+
+with duplicate_cte as (
+select *,
+row_number() over(
+partition by ParcelID,PropertyAddress, SalePrice, SaleDate, LegalReference ORDER BY UniqueID) row_num
+from nash_housing
+)
+
+delete 
+from duplicate_cte
+where row_num>1
+-- clear from duplicates 
+
+-- delete unused columns ,OwnerAddress and PropertyAddress we separate its state , city and address
+alter table nash_housing 
+drop column OwnerAddress, TaxDistrict ,SaleDate
+
+alter table nash_housing 
+drop column PropertyAddress
+
+
+select *
+from nash_housing
+where BuildingValue = 0 -- 1851 rows 
+
+-- YearBuilt in float need to change it as Date 
+alter table nash_housing
+add Built_year date
+
+update nash_housing
+set Built_year =  cast(YearBuilt as date) 
+
+--Explicit conversion from data type float to date is not allowed.
+-- try_cast function doesn’t work in this
+-- so YearBuilt firstly convert to char and then convert date
+-- SELECT CAST( CAST( 20351231 AS char(8)) AS date )
+
+
+select cast( cast(YearBuilt as nvarchar(255))as date)
+from nash_housing
+
+select cast(YearBuilt as nvarchar(255))
+from nash_housing
+--01) first convert it to string
+alter table nash_housing
+add Built_year_string nvarchar(255)
+
+update nash_housing
+set Built_year_string = cast(YearBuilt as nvarchar(255))
+
+-- 02) NOW string convert to date - use try_cast 
+select *
+from nash_housing
+
+
+select try_cast(Built_year_string as date)
+from nash_housing
+
+update nash_housing
+set Built_year =  try_cast(Built_year_string as date)
+
+
+-- now only want to get Year( can't get it)
+alter table nash_housing
+add year_built date
+
+select YEAR(Built_year)
+from nash_housing
+
+update nash_housing
+set year_built = YEAR(Built_year)
+
+UPDATE nash_housing
+SET year_built = YEAR(Built_year);
+
+UPDATE nash_housing
+SET year_built = DATEFROMPARTS(YEAR(Built_year), 1, 1);
+
+
+
+alter table nash_housing 
+drop column Built_year_string,Built_year
+
+
+
+
+
+
+
+
+
+
+-------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+-- select only the land property sales data to another database as only_property_land - 
+SELECT *
+INTO only_property_land
+FROM nash_housing
+where BuildingValue = 0 
+
+select *
+from only_property_land
+
+-- update NULL valus as 0
+update only_property_land
+set YearBuilt = 0 , Bedrooms=0,FullBath=0, HalfBath=0
+where BuildingValue = 0 
+
+
+-- update NULL valus as 0 for nash_housing
+update nash_housing
+set YearBuilt = 0 , Bedrooms=0,FullBath=0, HalfBath=0
+where BuildingValue = 0 
+
+
+
+
+
+
