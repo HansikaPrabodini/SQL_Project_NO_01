@@ -1,3 +1,5 @@
+# Data Cleaning and Exploratory Data Analysis (EDA) Tasks
+
 ## Data Cleaning Tasks
 * Remove Duplicates - Use Row Number function to identify and remove duplicate records.
 * Convert Data Types - Ensure all columns have the appropriate data types for their content.
