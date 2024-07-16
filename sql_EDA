@@ -1,0 +1,357 @@
+------------------now again use nash_housing for EDA---------------------------------------------------------------------------------------------------------- 
+select *
+from nash_housing
+
+-- View the Schema of the Table 
+-- check data types  
+
+select COLUMN_NAME, DATA_TYPE
+from INFORMATION_SCHEMA.COLUMNS
+where TABLE_NAME='nash_housing'
+
+select count(*) as total_rows 
+from nash_housing
+-- total_rows = 56373
+
+
+select *
+from nash_housing
+where LandUse ='FOREST'
+
+select distinct LandUse
+from nash_housing
+
+--Descriptive Statistics for Numeric Columns - Acreage
+select 
+min(Acreage) as Acreage_min,
+max(Acreage) as Acreage_max,
+avg(Acreage) as Acreage_avg,
+sum(Acreage) as Acreage_sum,
+count(Acreage) as Acreage_count
+from nash_housing
+
+
+select * 
+from nash_housing
+where owner_address = property_address
+--20898 rows
+
+
+
+
+select * 
+from nash_housing
+where owner_city = property_city
+-- 25968 rows
+
+
+-- Frequency Distribution - LandUse
+select LandUse ,count(*) as frequency
+from nash_housing
+group by LandUse
+order by frequency desc
+
+
+--- Histogram of a Numeric Column - SalePrice
+select SalePrice , count(*) as frequency
+from nash_housing
+group by SalePrice
+order by 2 desc
+
+-- Value Counts and Percentages - LandUse / over-window function
+select LandUse, 
+count(*) as frequency ,
+count(*) * 100.0 / sum(count(*)) over () as percentage
+from nash_housing
+group by LandUse
+order by 2 desc
+
+-- check for missing values - LegalReference
+select 
+sum(case when LegalReference is null then 1 else 0 end) as LegalReference_missing_values
+from nash_housing;
+
+-- Check for Duplicates - 0wnercity and propertycity
+select owner_city,property_city, count(*)
+from nash_housing
+where owner_city is not null
+group by owner_city,property_city
+having count(*) > 1;
+
+--- Correlation between Two Numeric Columns - BuildingValue , TotalValue
+-- in sql server the CORR function is not available for calculating correlation directly 
+select 
+CORR (BuildingValue,TotalValue) as correlation
+from nash_housing
+-- need to use python or statistical functions
+
+
+-- Time Series Aggregation - Sale_Date for years and months
+select * 
+from nash_housing
+
+select 
+DATEPART(year,sale_date) as YR,
+DATEPART(MONTH,sale_date) as MN,
+sum(SalePrice) as Month_sum
+from nash_housing
+group by DATEPART(year,sale_date), DATEPART(MONTH,sale_date)
+order by 1,2 desc
+
+
+
+-- for years 
+select 
+DATEPART(year,sale_date) as YR,
+sum(SalePrice) as year_sum_sale_amount
+from nash_housing
+group by DATEPART(year,sale_date)
+order by 1 desc
+
+select 
+max(sale_date),
+min(sale_date)
+from nash_housing
+
+-- convert saleprice to currency 
+-- SELECT FORMAT(1234, 'C') 
+select
+FORMAT(SalePrice,'C')
+from nash_housing
+
+-- SELECT FORMAT(1234, 'C0') - without decimals
+select
+FORMAT(SalePrice,'C0')
+from nash_housing
+
+
+ALTER TABLE nash_housing 
+ADD Sale_Price NVARCHAR(50);
+
+-- Update the new column with formatted values
+UPDATE nash_housing
+SET Sale_Price = FORMAT(CAST(SalePrice AS float), 'C')
+
+ALTER TABLE nash_housing 
+drop column SalePrice 
+
+SELECT *
+FROM nash_housing
+
+--SELECT CONVERT(money, nVarCharColumnName)
+--FROM.
+
+select convert (money , Sale_Price)
+from nash_housing
+
+update nash_housing
+set Sale_Price = convert (money , Sale_Price)
+
+
+
+-- beacuse i drop SalePrice now Sale_Price is in varchar so can't do any calculations so need to add again SalePrice
+ALTER TABLE nash_housing 
+ADD SalePrice float;
+
+select 
+a.SalePrice, b.SalePrice
+from nash_housing a
+join nashville_housing b on a.[UniqueID ]=b.[UniqueID ]
+
+
+WITH updated_values AS (
+    SELECT a.[UniqueID], b.SalePrice AS new_SalePrice
+    FROM nash_housing a
+    JOIN nashville_housing b ON a.[UniqueID] = b.[UniqueID]
+)
+UPDATE nash_housing
+SET SalePrice = updated_values.new_SalePrice
+FROM updated_values
+WHERE nash_housing.[UniqueID] = updated_values.[UniqueID];
+
+SELECT *
+FROM nash_housing
+
+
+------ Yearly/Monthly/Weekly Trends
+-- this calculate sale weeks ,  base on week number
+-- 1 -149 mean first week dates 149 include in this data set
+
+select 
+datepart (week , sale_date) as weeks,
+count(*) as weekly_count
+from nash_housing
+group by datepart (week , sale_date) 
+order by 1 
+
+-- Categorical Data Analysis - Cross Tabulations
+select LandUse , owner_state , count(*) as counts
+from nash_housing
+where owner_state is not null
+group by LandUse , owner_state
+order by LandUse , owner_state
+
+-- Categorical Data Analysis - Pivot Tables
+
+select owner_city,
+sum(case when LandUse='SINGLE FAMILY' then 1 else 0 end ) as SINGLE_FAMILY_counts,
+sum(case when LandUse='FOREST' then 1 else 0 end ) as FOREST_counts
+from nash_housing
+group by owner_city
+
+
+--retriev Sale Prce > avg(Sale Price ) - using subquery
+
+select *
+from nash_housing
+where SalePrice > ( select avg(SalePrice) from nash_housing)
+
+-- selecting ( acreage only single family  > sverage acreage only single family ) 
+select *
+from nash_housing
+where Acreage > ( select avg(Acreage) from nash_housing where LandUse='SINGLE FAMILY') 
+AND LandUse='SINGLE FAMILY' 
+
+
+
+-- stored procedure 
+-- Creating a Stored Procedure for get latest built yrs > 1980 
+
+create procedure GetYearsBuilt 
+as
+begin 
+select * 
+from nash_housing
+where year(year_built) > 1980
+end;
+
+exec GetYearsBuilt
+
+-- Dropping a Stored Procedure
+--drop procedure GetYearsBuilt
+
+select * 
+from nash_housing
+
+-- Creating a Stored Procedure with Parameters - add parameter UniqueID 
+create procedure GetDetailsBySalePrice
+ @UniqueID float
+as
+begin 
+select * 
+from nash_housing
+where [UniqueID ] = @UniqueID
+end;
+
+
+exec GetDetailsBySalePrice @UniqueID=54582
+
+-- Creating a Stored Procedure with Output Parameters
+drop procedure Get_Total_SalePrice_By_LandUse
+
+create procedure Get_Total_SalePrice_By_LandUse
+@LandUse nvarchar(255),
+@Total_SalePrice DECIMAL(18, 2) output 
+as
+begin
+select @Total_SalePrice=sum(SalePrice)
+from nash_housing
+where LandUse=@LandUse
+end;
+
+
+declare @Total DECIMAL(18, 2)   -- Declare a variable to hold the output value
+exec Get_Total_SalePrice_By_LandUse -- Execute the stored procedure
+@LandUse='RESIDENTIAL CONDO' ,
+@Total_SalePrice = @Total output
+select @Total as TotalSalePrice   -- Select the output variable to view the result
+
+
+declare @Total DECIMAL(18, 2)   -- Declare a variable to hold the output value
+exec Get_Total_SalePrice_By_LandUse -- Execute the stored procedure
+@LandUse='SINGLE FAMILY' ,
+@Total_SalePrice = @Total output
+select @Total as TotalSalePrice 
+
+--float can convert to decimal-------------------------------------- 
+SELECT CONVERT(DECIMAL(18, 2), SalePrice) AS DecimalValue
+FROM nash_housing
+--------------------------------------------------------------------
+
+-- use triggers for update 
+-- challenge -- i can't convert NULL valus to 0 in year_built column so i'll try triggers for that 
+
+select * 
+from nash_housing
+
+alter table nash_housing 
+add example_dates date 
+------------------------------ trigger part ------------------------------------------------
+create trigger trigger_for_update
+on nash_housing
+instead of update 
+as
+begin
+update nash_housing
+set example_dates = isnull(a.year_built,0000-00-00)
+
+from nash_housing b
+join inserted a on a.[UniqueID ]=b.[UniqueID ]
+end;
+-------------------------------------------------------------------------------------------
+
+update nash_housing 
+set example_dates =  DATEFROMPARTS(YEAR(year_built), 1, 1);
+
+drop trigger trigger_for_update
+
+alter table nash_housing
+drop column example_date, example_dates,example
+alter table nash_housing
+drop column example
+
+-- its not sucsses
+
+
+----- Views in SQL------- similar to tables 
+create view nash_view as
+select [UniqueID ],LandUse,Acreage,LandValue,BuildingValue,TotalValue
+from nash_housing
+
+select * 
+from nash_view
+where LandUse ='SINGLE FAMILY'
+
+-- drop view
+-- DROP VIEW view_name
+
+
+
+
+-- window functions -- 
+-- over--
+select [UniqueID ] , LegalReference , LandUse , 
+sum(SalePrice) over( partition by property_city ) as city_total
+from nash_housing
+
+
+-- row number --- use for find duplicates / previously used 
+select 
+row_number() over (order by ParcelID ) as row_num, -- in this case row number only based on ParcelID
+*
+from nash_housing
+
+-- rank function -- ranks based in saleprice amount
+select * ,
+rank() over (order by SalePrice desc) as SalePrice_rank
+from nash_housing
+
+
+-- first value --
+select * ,
+first_value(UniqueID) over (partition by LandUse order by SalePrice desc) as highest_Saleprice_By_landUse
+from nash_housing
+-- get highest sale price uniqueID in each LandUse
+--partition by LandUse ~ similar to  group by 
+
+
